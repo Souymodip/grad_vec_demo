@@ -353,7 +353,7 @@ def build4Paper2Pixel(npImg, feature_key, app_config, debug):
     small_region = app_config['SMALL_REGION']
     new_region_idx = 1
     for idx in size_map:
-        if size_map[idx] >= small_region or True:
+        if size_map[idx] >= small_region:
             fill_segments[segment_ == idx] = new_region_idx
             new_region_idx = new_region_idx + 1
         else:
@@ -407,7 +407,7 @@ def main(npImg, app_config, debug):
 
 if __name__ == "__main__":
     app_config = {
-        'EDGIFY': True,
+        'EDGIFY': False,
         'SMALL_REGION':0
     }
     indir = os.path.join('..', 'vec_assets', 'structured', 'intermediate')
