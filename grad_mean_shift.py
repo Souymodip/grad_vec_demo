@@ -260,7 +260,7 @@ def build(npImg, feature_key, debug):
         axs[1].set_title(f"Regions:{len(Counter(segment_))}")
         plt.show()
     segment_ = edgy(npimg, segment_, debug=False)
-    vec(img=npimg, flat_R=segment_, debug=False)
+    vec(img=npimg, flat_R=segment_, svg=False, debug=False)
     # reconstruct(npimg.shape, flat_segments=segment_, flat_features=features, file=file, ext=ext, debug=False)
 
 
@@ -365,10 +365,11 @@ def build4Paper2Pixel(npImg, feature_key, app_config, debug):
         plt.show()
 
     lin_grad_fill, solid_fill = vec(img=npimg, flat_R=fill_segments, debug=False)
-    for reg_idx in lin_grad_fill:
-        print("{} -> {}".format(reg_idx, lin_grad_fill[reg_idx]))
-    for reg_idx in solid_fill:
-        print("{} -> {}".format(reg_idx, solid_fill[reg_idx]))
+    if debug:
+        for reg_idx in lin_grad_fill:
+            print("{} -> {}".format(reg_idx, lin_grad_fill[reg_idx]))
+        for reg_idx in solid_fill:
+            print("{} -> {}".format(reg_idx, solid_fill[reg_idx]))
 
     fill_segments[fill_segments==stroke_id] = np.max(fill_segments)+1
     reg_map = segmentation2png(fill_segments.reshape(npimg.shape[:2]), name='region.png')

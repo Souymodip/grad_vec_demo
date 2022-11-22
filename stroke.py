@@ -27,7 +27,7 @@ def squeeze_reg_idx(flat_R):
     ordered_reg_ix = sorted(set(flat_R))
     for new_idx, old_idx in enumerate(ordered_reg_ix):
         flat_R[flat_R == old_idx] = new_idx
-    print("- squeezed :", Counter(flat_R))
+    # print("- squeezed :", Counter(flat_R))
     return flat_R
 
 

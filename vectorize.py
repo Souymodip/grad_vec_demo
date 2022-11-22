@@ -162,7 +162,7 @@ def fit_linear_grad(img: object, R: object, G: object, reg_idx: object, settings
 #         stops_colors = fit_linear_grad(rImg, rR, rG, reg_idx, settings, False, R2OW[reg_idx])
 #         if len(stops_colors) == 0:
 
-def main(img, flat_R, svg=True, debug=False):
+def main(img, flat_R, svg=False, debug=False):
     print("Vectorizing Patches")
     settings = {
         'SMALL_REGIONS': 25,

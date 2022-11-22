@@ -15,14 +15,14 @@ def flip_image(x):
     return np.flipud(x)
 
 def open():
-    cmd = f'open {os.path.join(cg.SVG, "out.svg")}'
+    cmd = f'open {os.path.join(cg.OUT_DIR, "imageTrace", "input_image.svg")}'
     os.system(cmd)
 
 
 def vec(npImg):
     print(f'Image:{npImg.shape}, {np.min(npImg)} ~ {np.max(npImg)}')
     if app_config['SMOOTHEN']: npImg = smoothen(npImg)
-    npImg = flip_image(npImg)
+    # npImg = flip_image(npImg)
     msSeg, mergeSeg = segment(npImg, app_config, debug=False)
     svgPng = svgfy()
     return svgPng
