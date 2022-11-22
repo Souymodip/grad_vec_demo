@@ -313,7 +313,7 @@ def render_region(fill_segments, lin_grad_fill, npimg):
     plt.show()
 
 
-def encode_fill_data(lin_grad_fill, solid_fill, stroke_id):
+def encode_fill_data(lin_grad_fill, solid_fill, stroke_id, debug=False):
     msss = []
     for reg_idx in lin_grad_fill:
         if reg_idx != stroke_id:
@@ -334,7 +334,8 @@ def encode_fill_data(lin_grad_fill, solid_fill, stroke_id):
             colors = np.round(255 * colors)
             mss = ' '.join(['S', str(reg_idx)] + [str(c) for c in colors])
             msss.append(mss)
-    for m in msss: print(m)
+    if debug:
+        for m in msss: print(m)
     return msss
 
 
@@ -408,11 +409,12 @@ def main(npImg, app_config, debug):
 
 if __name__ == "__main__":
     app_config = {
-        'EDGIFY': False,
+        'SMOOTHEN': False,
+        'EDGIFY': True,
         'SMALL_REGION':0
     }
-    indir = os.path.join('..', 'vec_assets', 'structured', 'intermediate')
-    name = 'hummie.png'
+    indir = os.path.join('..', 'vec_assets', 'structured', 'basic')
+    name = 'halfwire-linear3.png'
     file = os.path.join(indir, '{}'.format(name))
     img=np.array(Image.open(file))
     main(npImg = img, app_config=app_config, debug=True)

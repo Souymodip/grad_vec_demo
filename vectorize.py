@@ -120,7 +120,7 @@ def fit_linear_grad(img: object, R: object, G: object, reg_idx: object, settings
         fig.suptitle("Avg Color in direction")
         plt.show()
     if np.std(avg_sample) < 0.001 : return []
-    stop_pos, stop_colors = stop_extract(avg_sample, sample_pos, debug)
+    stop_pos, stop_colors = stop_extract(avg_sample, sample_pos, debug=False)
 
     if debug:
         fig, axs = plt.subplots(1, 2)

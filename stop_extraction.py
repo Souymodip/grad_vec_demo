@@ -2,7 +2,7 @@ import numpy as np
 from scipy.ndimage import convolve1d
 import config as cg
 import matplotlib.pyplot as plt
-
+from numpy.polynomial import polynomial as P
 
 def laplacian1d(series, size=21):
     left = -1 * np.ones(size)
@@ -34,26 +34,6 @@ def get_peaks(s):
     return np.array(candidates)
 
 
-
-def cluster(profile, s):
-    cluster = []
-    window = 1
-    filtered_s = []
-    for i in range(len(s)):
-        if len(cluster) == 0:
-            cluster.append(s[i])
-        elif cluster[-1] + window >= s[i]:
-            cluster.append(s[i])
-        else:
-            max_i = np.argmax(profile[cluster])
-            filtered_s.append(cluster[max_i])
-            cluster = [s[i]]
-    if len(cluster) >0 :
-        max_i = np.argmax(profile[cluster])
-        filtered_s.append(cluster[max_i])
-    return filtered_s
-
-
 def co_linearity(profile, s, thresold):
     #FixMe: color distance ratio must also match space distance ratio
     f = [s[0]]
@@ -72,36 +52,75 @@ def co_linearity(profile, s, thresold):
     return f
 
 
+def get_robust_peaks(color_series, kl, debug=False):
+    from scipy import stats
+    if debug: print(f'get_robust_peaks : {len(color_series)}')
+    n = len(color_series)
+    peak_pos = set()
+    def diff(angle1, angle2):
+        if angle1 < 0 : angle1 = angle1+np.pi
+        if angle2 < 0 : angle2 = angle2+np.pi
+        min_a,max_a = min(angle1, angle2), max(angle1, angle2)
+        return min( max_a - min_a,  np.pi - (max_a - min_a))
+
+    diffs3 = [] if debug else None
+    offset = 5
+    peak_pos.add(0+offset)
+    peak_pos.add(n - 1-offset)
+    for ch in range(cg.CHANNELS):
+        if n >=  3*kl:
+            y = color_series[:, ch]
+            diffs = []
+            for j in np.arange(kl, len(y)-kl):
+                left_x = np.arange(j-kl, j+1)
+                right_x = np.arange(j, j+kl+1)
+                res_left = stats.linregress(left_x, y[left_x[0]:left_x[-1]+1])
+                res_right = stats.linregress(right_x, y[right_x[0]:right_x[-1]+1])
+
+                left_a, right_a = np.arctan(res_left.slope), np.arctan(res_right.slope)
+                d = diff(left_a, right_a)
+                if d >= 0.006: peak_pos.add(j)
+                diffs.append(d)
+            if debug: diffs3.append(diffs)
+
+    if debug:
+        fig, axs = plt.subplots(2, 3, tight_layout=True)
+        for ch in range(3):
+            axs[0, ch].plot(color_series[:,ch])
+            if diffs3 is not None and len(diffs3[ch]) > 0:
+                axs[1, ch].plot(diffs3[ch], 'r')
+        fig.suptitle('Robust Peaks')
+        plt.show()
+
+    peaks = list(peak_pos)
+    peaks.sort()
+    return peaks
+
+
+def cluster(peaks, window_size=10):
+    window = []
+    new_sites = []
+    for pos in peaks:
+        if len(window) == 0 or (pos - window[-1] < window_size and len(window) < window_size):
+            window.append(pos)
+        else:
+            new_sites.append(int(np.median(window)))
+            window = [pos]
+    if len(window) > 0:
+        new_sites.append(int(np.median(window)))
+    return new_sites
+
 def stop_extract(avg_colors, positions, debug):
-    bumps = [np.abs(laplacian1d(avg_colors[:, i])) for i in range(cg.CHANNELS)]
-    peaks = [get_peaks(bumps[i]) for i in range(3)]
-
+    peaks = get_robust_peaks(color_series=avg_colors, kl=10, debug=False)
+    peaks = cluster(peaks, window_size=10)
+    # peaks = co_linearity(avg_colors, peaks, thresold=0.005)
     if debug:
-        fig, axs = plt.subplots(3, 3)
+        fig, axs = plt.subplots(3, tight_layout=True)
         x = np.arange(0, len(avg_colors))
+        fig.suptitle(f'Peaks :{len(peaks)}')
         for i in range(3):
-            axs[0, i].plot(x, avg_colors[:, i])
-            axs[1, i].plot(x, bumps[i])
-            peak = np.array(peaks[i]).astype(int)
-            f_peak = cluster(bumps[i], peak)
-            axs[1, i].plot(peak, bumps[i][peak], 'o', color='red')
-            axs[1, i].plot(f_peak, bumps[i][f_peak], 'o', color='blue')
-
-    peaks = np.sort(list(set(cluster(bumps[0], peaks[0]) + cluster(bumps[1], peaks[1]) + cluster(bumps[2], peaks[2]))))
-    threshold = 0.005 * np.max(bumps)
-    if len(peaks) == 0:
-        assert len(avg_colors) > 4
-        offset = max(2, int(len(avg_colors)/100))
-        peaks =[offset, len(avg_colors) - offset]
-    peaks = co_linearity(avg_colors, peaks, thresold=threshold)
-
-    if debug:
-        x = np.arange(0, len(avg_colors))
-        for i in range(3):
-            axs[2, i].plot(x, bumps[i])
-            axs[2, i].plot(peaks, bumps[i][peaks], 'o', color='red')
-
-        fig.suptitle("Co-Lin:{:.3f}, peaks:{}".format(threshold, peaks))
+            axs[i].plot(x, avg_colors[:, i])
+            axs[i].plot(x[peaks], avg_colors[peaks, i], 'ro')
         plt.show()
 
     return positions[peaks], avg_colors[peaks]
