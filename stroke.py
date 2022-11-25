@@ -99,3 +99,7 @@ def main(img, flat_R, debug):
     }
     # flat_R = anti_aliased(img, flat_R, settings)
     return cluster(img, flat_R, settings, debug=debug)
+
+
+# def mainV1(img, flat_R, app_settings, debug):
+

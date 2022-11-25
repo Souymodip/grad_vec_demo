@@ -8,6 +8,7 @@ from helpers import gradient, draw_gradient, avg_smoothen
 import config as cg
 from svgfy import get_linear_grad_fill, polyline_grad, create_svg
 from stop_extraction import stop_extract, render
+from progress.bar import ChargingBar
 
 
 def draw_contours(R_idx, ow_, reg_idx):
@@ -136,31 +137,46 @@ def fit_linear_grad(img: object, R: object, G: object, reg_idx: object, settings
     return [stop_pos, stop_colors]
 
 
-# def get_lin_grad_data(img, flat_R, reg_idxs):
-#     settings = {
-#         'SMALL_REGIONS': 25,
-#         'SIGNIFICANT_CONTACT':7,
-#         'MIN_COLOR_SAMPLES': 10,
-#         'TRIM_BOUNDARY': True,
-#         'LIN_GRAD_QUALIFICATION_RATIO': 0.03,
-#         'SOLID_MERGE_THRESHOLD': 0.005,
-#         'SAMPLE_STEP': 1,
-#         'EXCEPTABLE_DEVIATION': 0.02 # 0.5
-#     }
-#
-#     G = gradient(img)
-#     R = flat_R.reshape(*img.shape[:2])
-#     I, J = np.meshgrid(np.arange(0, img.shape[0]), np.arange(0, img.shape[1]), indexing='ij')
-#     flat_I, flat_J = I.flatten(), J.flatten()
-#
-#     solid_fill = dict()
-#     for reg_idx in reg_idxs:
-#         r_i, r_j = get_range(flat_R, flat_I, flat_J, reg_idx)
-#         rImg = img[r_i[0]:r_i[1] + 1, r_j[0]:r_j[1] + 1]
-#         rR = R[r_i[0]:r_i[1] + 1, r_j[0]:r_j[1] + 1]
-#         rG = G[r_i[0]:r_i[1] + 1, r_j[0]:r_j[1] + 1]
-#         stops_colors = fit_linear_grad(rImg, rR, rG, reg_idx, settings, False, R2OW[reg_idx])
-#         if len(stops_colors) == 0:
+def get_fill_data(img, flat_R, app_settings, debug=False):
+    print(f'Fill Data for large Regions')
+    settings = {
+        'SMALL_REGIONS': app_settings['FILL_DATA_SMALL_REGION_THRESHOLD'],
+        'SIGNIFICANT_CONTACT': 7,
+        'MIN_COLOR_SAMPLES': 10,
+        'TRIM_BOUNDARY': True,
+        'LIN_GRAD_QUALIFICATION_RATIO': 0.03,
+        'SOLID_MERGE_THRESHOLD': 0.005,
+        'SAMPLE_STEP': 1,
+        'EXCEPTABLE_DEVIATION': 0.02  # 0.5
+    }
+
+    G = gradient(img)
+    size_map = Counter(flat_R)
+    small_region = settings['SMALL_REGIONS']
+
+    R = flat_R.reshape(*img.shape[:2])
+    I, J = np.meshgrid(np.arange(0, img.shape[0]), np.arange(0, img.shape[1]), indexing='ij')
+    flat_I, flat_J = I.flatten(), J.flatten()
+    solid_fill = dict()
+    lin_grad_fill = dict()
+
+    with ChargingBar(f'\t- Linear and solid fill for {len(size_map)} Regions', max_count=len(size_map)) as cb:
+        for reg_idx in size_map:
+            if size_map[reg_idx] >= small_region:
+                r_i, r_j = get_range(flat_R, flat_I, flat_J, reg_idx)
+                rImg = img[r_i[0]:r_i[1] + 1, r_j[0]:r_j[1] + 1]
+                rR = R[r_i[0]:r_i[1] + 1, r_j[0]:r_j[1] + 1]
+                rG = G[r_i[0]:r_i[1] + 1, r_j[0]:r_j[1] + 1]
+
+                stops_colors = fit_linear_grad(rImg, rR, rG, reg_idx, settings, debug, None)
+                if len(stops_colors) > 0:
+                    for i, s in enumerate(stops_colors[0]):
+                        stops_colors[0][i] = np.array([s[0] + r_j[0], s[1] + r_i[0]])
+                    lin_grad_fill[reg_idx] = stops_colors
+                elif len(stops_colors) == 0:
+                    solid_fill[reg_idx] = np.mean(rImg[rR == reg_idx], axis=0)
+            cb.next()
+    return lin_grad_fill, solid_fill
 
 def main(img, flat_R, svg=False, debug=False):
     print("Vectorizing Patches")

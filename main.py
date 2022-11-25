@@ -28,12 +28,25 @@ def vec(npImg):
     return svgPng
 
 
-
 if __name__ == '__main__':
     app_config = {
         'SMOOTHEN': False,
-        'EDGIFY': True,
-        'SMALL_REGION':0
+        'SMALL_REGION':50,
+        'ALIASED_SMALL_REGION':50,
+        'MERGE_SMALL_REGION_THRESHOLD':50,
+        'FILL_DATA_SMALL_REGION_THRESHOLD':50,
+
+        'ALIASED_ITERATIONS':1,
+        'ALIASED_ITERATIONS_MAX':10,
+        'PAD_REG_INDEX':1,
+
+        'ALIASED_SQUEEZE_THIN_REGION':False,
+        'ALIASED_INFLATE_COLOR_DIFF_THRESHOLD': 0.1,
+        'ALIASED_SQUEEZE_COLOR_DIFF_THRESHOLD': 0.4,
+
+        'DE_ANTI_ALIAS':True,
+        'DE_ANTI_ALIAS_SMALL_REGION':50,
+        'DE_ANTI_ALIAS_ITERATIONS':10,
     }
     with gr.Blocks(title='Grad2Vec') as demo:
         with gr.Row():

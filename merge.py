@@ -5,7 +5,7 @@ from config import CHANNELS
 from lin_grad import fit_grad
 from helpers import gradient, draw_gradient
 import matplotlib.pyplot as plt
-
+from progress.bar import ChargingBar
 
 def neighbourhood(HW, pidx):
     H, W = HW
@@ -29,11 +29,14 @@ def merge(R, candidate_regions, is_mergable):
     # g = nx.Graph()
     cc_dict = np.arange(0, np.max(R)+1)
 
-    for reg_ids in candidate_regions():
-        reg_heads = set([cc_dict[reg] for reg in reg_ids])
-        closure = [reg_idx for reg_idx, head in enumerate(cc_dict) if head in reg_heads]
-        if is_mergable(closure) is None: continue
-        cc_dict[closure] = min(closure)
+    candidate_regs = candidate_regions()
+    if len(candidate_regs) > 0:
+        with ChargingBar("\t- Merge: ", max=len(candidate_regs)) as cb:
+            for reg_ids in candidate_regs:
+                reg_heads = set([cc_dict[reg] for reg in reg_ids])
+                closure = [reg_idx for reg_idx, head in enumerate(cc_dict) if head in reg_heads]
+                if is_mergable(closure) is not None: cc_dict[closure] = min(closure)
+                cb.next()
 
     head_map = dict()
     for reg_idx in np.arange(0, np.max(R)+1):
@@ -58,14 +61,16 @@ def get_candidate_regions(R, settings):
 
     def large_adj_region_pairs():
         pairs = set()
-        for reg_id in range(np.max(R) + 1):
-            if reg_id not in RegionSizes or RegionSizes[reg_id] < settings['SMALL_REGION']: continue
-            boundary_pidxs = boundary(R_flat, (H,W), reg_id)
-            CR = Counter(R_flat[boundary_pidxs])
-            for neighbour_id in CR:
-                if neighbour_id != reg_id and CR[neighbour_id] > settings['SIGNIFICANT_CONTACT'] \
-                        and RegionSizes[neighbour_id] > settings['SMALL_REGION']:
-                    pairs.add((reg_id, neighbour_id) if reg_id < neighbour_id else (neighbour_id, reg_id))
+        with ChargingBar("\t- Get Candidate for Merge: ", max=np.max(R) + 1) as cb:
+            for reg_id in range(np.max(R) + 1):
+                if reg_id not in RegionSizes or RegionSizes[reg_id] >= settings['SMALL_REGION']:
+                    boundary_pidxs = boundary(R_flat, (H,W), reg_id)
+                    CR = Counter(R_flat[boundary_pidxs])
+                    for neighbour_id in CR:
+                        if neighbour_id != reg_id and CR[neighbour_id] > settings['SIGNIFICANT_CONTACT'] \
+                                and RegionSizes[neighbour_id] > settings['SMALL_REGION']:
+                            pairs.add((reg_id, neighbour_id) if reg_id < neighbour_id else (neighbour_id, reg_id))
+                cb.next()
 
         return pairs
 
@@ -109,10 +114,10 @@ def get_mergability(R, I, G, settings):
     return is_lin_mergable
 
 
-def lin_merge(img, flat_segment, debug=True):
+def lin_merge(img, flat_segment, app_settings, debug=True):
     print("Linear Merge of regions")
     settings = {
-        'SMALL_REGION': 50,
+        'SMALL_REGION': app_settings['MERGE_SMALL_REGION_THRESHOLD'],
         'SIGNIFICANT_CONTACT':7,
         'TRIM_BOUNDARY': True,
         'LIN_GRAD_QUALIFICATION_RATIO': 0.03,

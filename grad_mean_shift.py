@@ -1,4 +1,7 @@
 import os
+
+import PIL.Image
+
 import config as cg
 import scipy.spatial
 from PIL import Image
@@ -8,7 +11,7 @@ from progress.bar import ChargingBar
 import scipy.optimize
 from merge import lin_merge
 from stroke import main as edgy
-from vectorize import main as vec
+from vectorize import main as vec, get_fill_data
 import cv2
 from collections import Counter
 
@@ -207,7 +210,6 @@ def process_file(npimg):
     # print("Processing file {}".format(file_name))
 
     output_orig=os.path.join(cg.OUT_DIR, "out.png")
-
     npimg=npimg[:,:,:3].astype(float)/255.
     Image.fromarray(np2pil(npimg)).save(output_orig)
     return npimg
@@ -264,25 +266,36 @@ def build(npImg, feature_key, debug):
     # reconstruct(npimg.shape, flat_segments=segment_, flat_features=features, file=file, ext=ext, debug=False)
 
 
-def segmentation2png(segmentation: object, name: object) -> object:
-    img = np.zeros((*segmentation.shape, 3), dtype='uint8')
-    reg_count = np.max(segmentation)+1
+def segmentation2png(segmentation: object, shape:object, name: object, debug:bool =False) -> object:
+    assert len(segmentation[segmentation == 0]) == 0
+    seg_img = np.zeros((len(segmentation), cg.CHANNELS), dtype='uint8')
+    def get_color(rIdx):
+        assert rIdx < 256 ** 3
+        assert rIdx != 0
+        ret = np.array([((rIdx - (rIdx % (256 ** 2))) / (256 ** 2)) % 256, ((rIdx - (rIdx % 256)) / 256) % 256, rIdx % 256]).astype(int)
+        assert np.sum(ret) != 0
+        return ret
 
-    def get_color(idx):
-        D = 256
-        o = []
-        last = idx
-        for i in range(1, 4):
-            o.append(last%(D**i))
-            last = int(idx/(D**i))
-        return np.array(o)
-    print("Region count:", reg_count)
-    for idx in range(int(reg_count)):
-        img[segmentation == idx] = get_color(idx)
+    for pIdx, rIdx in enumerate(segmentation):
+        seg_img[pIdx] = get_color(rIdx)
+
+    for pIdx, rIdx in enumerate(seg_img):
+        if (rIdx == np.zeros(cg.CHANNELS)).all():
+            print(f'pIdx: {pIdx}, rIdx:{rIdx}')
+            assert 0
 
     path = os.path.join(cg.INPUT_DIR, name)
-    cv2.imwrite(path, img)
-    return img
+    seg_img = seg_img.reshape(*shape, cg.CHANNELS)
+    PIL.Image.fromarray(seg_img).save(path)
+
+    if debug:
+        img_ = np.array(PIL.Image.open(path))
+        for i,j in np.ndindex(img_.shape[:2]):
+            if np.sum(img_[i,j]) == 0:
+                print(f' img_[{i}, {j}] := {img_[i,j]}')
+                assert 0
+
+    return seg_img
 
 
 def render_region(fill_segments, lin_grad_fill, npimg):
@@ -313,67 +326,53 @@ def render_region(fill_segments, lin_grad_fill, npimg):
     plt.show()
 
 
-def encode_fill_data(lin_grad_fill, solid_fill, stroke_id, debug=False):
+def encode_fill_data(lin_grad_fill, solid_fill, debug=False):
     msss = []
     for reg_idx in lin_grad_fill:
-        if reg_idx != stroke_id:
-            stops, colors = lin_grad_fill[reg_idx]
-            colors = np.round(255 * colors)
-            ds = [np.linalg.norm(stops[0] - s) for s in stops]
-            ds = np.cumsum(ds)
-            ds = ds / ds[-1]
-            mss = [reg_idx, stops[0][0], stops[0][1], stops[-1][0], stops[-1][1]]
-            for i, d in enumerate(ds):
-                mss.extend([d, colors[i][0], colors[i][1], colors[i][2]])
-            mss = ' '.join(['L'] + [str(m) for m in mss])
-            msss.append(mss)
+        stops, colors = lin_grad_fill[reg_idx]
+        colors = np.round(255 * colors)
+        ds = [np.linalg.norm(stops[0] - s) for s in stops]
+        ds = np.cumsum(ds)
+        ds = ds / ds[-1]
+        mss = [reg_idx, stops[0][0], stops[0][1], stops[-1][0], stops[-1][1]]
+        for i, d in enumerate(ds):
+            mss.extend([d, colors[i][0], colors[i][1], colors[i][2]])
+        mss = ' '.join(['L'] + [str(m) for m in mss])
+        msss.append(mss)
 
     for reg_idx in solid_fill:
-        if reg_idx != stroke_id:
-            colors = solid_fill[reg_idx]
-            colors = np.round(255 * colors)
-            mss = ' '.join(['S', str(reg_idx)] + [str(c) for c in colors])
-            msss.append(mss)
+        colors = solid_fill[reg_idx]
+        colors = np.round(255 * colors)
+        mss = ' '.join(['S', str(reg_idx)] + [str(c) for c in colors])
+        msss.append(mss)
     if debug:
         for m in msss: print(m)
     return msss
 
 
 def build4Paper2Pixel(npImg, feature_key, app_config, debug):
-    from collections import Counter
+    import edge
     npimg = process_file(npImg)
     segment, features = segments_features(npimg, feature_key)
-    segment_ = lin_merge(img=npimg, flat_segment=segment, debug=False)
-    if app_config['EDGIFY']: segment_ = edgy(npimg, segment_, debug=False)
+    segment_merged = lin_merge(img=npimg, flat_segment=segment, app_settings=app_config, debug=debug)
+    lin_grad_fill, solid_fill = get_fill_data(img=npimg, flat_R=segment_merged, app_settings=app_config, debug=False)
 
-    stroke_id = -1
-    fill_segments = np.ones(segment_.shape, dtype='int') * stroke_id
-    stroke_segment = np.zeros(segment_.shape, dtype='int')
+    # reg 0 is reserved for padding in PaperToPixel.
+    fill_segments, lin_grad_fill, solid_fill = edge.main(npimg, segment_merged, lin_grad_fill, solid_fill, app_config, debug=debug)
+    print(f'- Linear Fill:{len(lin_grad_fill)}, Solid Fill: {len(solid_fill)}, Regions:{len(Counter(fill_segments))}, '
+          f'max region id:{np.max(fill_segments)}')
 
-    size_map = Counter(segment_)
-    small_region = app_config['SMALL_REGION']
-    new_region_idx = 1
-    for idx in size_map:
-        if size_map[idx] >= small_region:
-            fill_segments[segment_ == idx] = new_region_idx
-            new_region_idx = new_region_idx + 1
-        else:
-            stroke_segment[segment_ == idx] = 1
+    # Still small regions are deemed as strokes
+    stroke_segment = np.zeros(segment_merged.shape, dtype='int')
+    stroke_segment[fill_segments == app_config['PAD_REG_INDEX']-1] = 1
+    fill_segments[stroke_segment==1] = np.max(fill_segments)+1
 
-    if debug:
-        plt.imshow(fill_segments.reshape(npimg.shape[:2]))
-        plt.title("Segmentation. {} Regions".format(np.max(fill_segments)+1))
-        plt.show()
+    list_reg = list(Counter(fill_segments))
+    list_reg.sort()
+    print(f'List of regions: {list_reg}')
 
-    lin_grad_fill, solid_fill = vec(img=npimg, flat_R=fill_segments, debug=False)
-    if debug:
-        for reg_idx in lin_grad_fill:
-            print("{} -> {}".format(reg_idx, lin_grad_fill[reg_idx]))
-        for reg_idx in solid_fill:
-            print("{} -> {}".format(reg_idx, solid_fill[reg_idx]))
-
-    fill_segments[fill_segments==stroke_id] = np.max(fill_segments)+1
-    reg_map = segmentation2png(fill_segments.reshape(npimg.shape[:2]), name='region.png')
+    # write to png
+    reg_map = segmentation2png(fill_segments, shape=npimg.shape[:2], name='region.png')
     assert reg_map.shape == npimg.shape
     stroke_map = (255*stroke_segment).reshape(npimg.shape[:2]).astype(np.uint8)
     path = os.path.join(cg.INPUT_DIR, 'stroke.png')
@@ -381,13 +380,15 @@ def build4Paper2Pixel(npImg, feature_key, app_config, debug):
     path = os.path.join(cg.INPUT_DIR, 'input_image.png')
     input_image = (npimg*255).astype(np.uint8)
     cv2.imwrite(path, cv2.cvtColor(input_image, cv2.COLOR_RGB2BGR))
+
     if debug:
+        def indexy(x): return x[:,:,0]*255*255 + x[:,:,1]*255 + x[:,:,2]
         fig, axs = plt.subplots(1,3)
         axs[0].imshow(input_image)
-        axs[1].imshow(reg_map)
+        axs[1].imshow(indexy(reg_map))
         axs[2].imshow(stroke_map)
         plt.show()
-    msss = encode_fill_data(lin_grad_fill, solid_fill, stroke_id)
+    msss = encode_fill_data(lin_grad_fill, solid_fill)
     path = os.path.join(cg.INPUT_DIR, 'reg_fill_data.txt')
     with open(path, 'w') as file:
         msss = [mss+'\n' for mss in msss]
@@ -397,24 +398,35 @@ def build4Paper2Pixel(npImg, feature_key, app_config, debug):
 
 def main(npImg, app_config, debug):
     feature_key=FeatureKey(5.,10./255,5./255)
-    msSeg, mergeSeg, strokeSeg = build4Paper2Pixel(npImg, feature_key, app_config, debug=False)
-    if debug:
-        fig, axs = plt.subplots(1,2, tight_layout=True)
-        axs[0].imshow(msSeg)
-        axs[1].imshow(mergeSeg)
-        fig.suptitle(f'Reg:{len(Counter(mergeSeg.flatten()))}')
-        plt.show()
+    msSeg, mergeSeg, strokeSeg = build4Paper2Pixel(npImg, feature_key, app_config, debug=debug)
     return msSeg, mergeSeg
     # build(file, feature_key, debug=True)
 
 if __name__ == "__main__":
     app_config = {
         'SMOOTHEN': False,
-        'EDGIFY': True,
-        'SMALL_REGION':0
+        'SMALL_REGION':50,
+        'ALIASED_SMALL_REGION':50,
+        'MERGE_SMALL_REGION_THRESHOLD':50,
+        'FILL_DATA_SMALL_REGION_THRESHOLD':50,
+
+        'ALIASED_ITERATIONS':1,
+        'ALIASED_ITERATIONS_MAX':10,
+        'PAD_REG_INDEX':1,
+
+        'ALIASED_SQUEEZE_THIN_REGION':False,
+        'ALIASED_INFLATE_COLOR_DIFF_THRESHOLD': 0.1,
+        'ALIASED_SQUEEZE_COLOR_DIFF_THRESHOLD': 0.4,
+
+        'DE_ANTI_ALIAS':True,
+        'DE_ANTI_ALIAS_SMALL_REGION':50,
+        'DE_ANTI_ALIAS_ITERATIONS':10,
     }
-    indir = os.path.join('..', 'vec_assets', 'structured', 'basic')
-    name = 'halfwire-linear3.png'
+    indir = os.path.join('..', 'vec_assets', 'structured', 'advanced')
+    name = 'blur_shapes.png'
     file = os.path.join(indir, '{}'.format(name))
-    img=np.array(Image.open(file))
-    main(npImg = img, app_config=app_config, debug=True)
+    print(f'File: {file}')
+    image=np.array(Image.open(file))
+    # image = image[95:135, 125:165, :3]
+    print(f'Image : {image.shape}')
+    main(npImg = image, app_config=app_config, debug=True)
