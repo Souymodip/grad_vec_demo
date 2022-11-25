@@ -70,7 +70,7 @@ def rgbDiff(rgb1, rgb2):
 def inflate_large_regions(img, flat_reg, fill_function, nbh, app_setting):
     size_map = Counter(flat_reg)
     P = np.arange(len(flat_reg))
-    small_region = app_setting['ALIASED_SMALL_REGION']
+    small_region = app_setting['ALIASED_INFLATE_SMALL_REGION']
     aliased_color_diff_threshold = app_setting['ALIASED_INFLATE_COLOR_DIFF_THRESHOLD']
     flat_img = img.reshape(-1, cg.CHANNELS)
 
@@ -90,7 +90,7 @@ def inflate_large_regions(img, flat_reg, fill_function, nbh, app_setting):
                         flat_reg[nIdx] = rIdx
                         new_Br.append(nIdx)
         return new_Br
-    max_count = app_setting['ALIASED_ITERATIONS_MAX']
+    max_count = app_setting['ALIASED_INFLATE_ITERATIONS_MAX']
     assert max_count > 0
     with ChargingBar('\t- Inflate', max=len(size_map)) as cb:
         for rIdx in size_map:

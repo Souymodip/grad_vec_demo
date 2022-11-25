@@ -25,28 +25,29 @@ def vec(npImg):
     # npImg = flip_image(npImg)
     msSeg, mergeSeg = segment(npImg, app_config, debug=False)
     svgPng = svgfy()
-    return svgPng
+    return svgPng, os.path.join(cg.OUT_DIR, 'imageTrace', 'input_image.svg')
 
 
 if __name__ == '__main__':
     app_config = {
         'SMOOTHEN': False,
-        'SMALL_REGION':50,
-        'ALIASED_SMALL_REGION':50,
-        'MERGE_SMALL_REGION_THRESHOLD':50,
-        'FILL_DATA_SMALL_REGION_THRESHOLD':50,
+        'SMALL_REGION': 150,
 
-        'ALIASED_ITERATIONS':1,
-        'ALIASED_ITERATIONS_MAX':10,
-        'PAD_REG_INDEX':1,
+        'MERGE_SMALL_REGION_THRESHOLD': 50,
+        'FILL_DATA_SMALL_REGION_THRESHOLD': 50,
 
-        'ALIASED_SQUEEZE_THIN_REGION':False,
+        'ALIASED_INFLATE_SMALL_REGION': 50,
+        'ALIASED_ITERATIONS': 1,
+        'ALIASED_INFLATE_ITERATIONS_MAX': 10,
+        'PAD_REG_INDEX': 1,
+
+        'ALIASED_SQUEEZE_THIN_REGION': False,
         'ALIASED_INFLATE_COLOR_DIFF_THRESHOLD': 0.1,
         'ALIASED_SQUEEZE_COLOR_DIFF_THRESHOLD': 0.4,
 
-        'DE_ANTI_ALIAS':True,
-        'DE_ANTI_ALIAS_SMALL_REGION':50,
-        'DE_ANTI_ALIAS_ITERATIONS':10,
+        'DE_ANTI_ALIAS': True,
+        'DE_ANTI_ALIAS_SMALL_REGION': 150,
+        'DE_ANTI_ALIAS_ITERATIONS': 10,
     }
     with gr.Blocks(title='Grad2Vec') as demo:
         with gr.Row():
@@ -57,6 +58,8 @@ if __name__ == '__main__':
         #     image_output3 = gr.Image()
         image_button1 = gr.Button("crunch!!")
         image_button2 = gr.Button("open in Ai")
-        image_button1.click(vec, inputs=image_input, outputs=image_output)
+        svg_file = gr.File(label='svg')
+        image_button1.click(vec, inputs=image_input, outputs=[image_output, svg_file])
         image_button2.click(open)
+
     demo.launch(share=False)

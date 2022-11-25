@@ -405,13 +405,14 @@ def main(npImg, app_config, debug):
 if __name__ == "__main__":
     app_config = {
         'SMOOTHEN': False,
-        'SMALL_REGION':50,
-        'ALIASED_SMALL_REGION':50,
+        'SMALL_REGION':150,
+
         'MERGE_SMALL_REGION_THRESHOLD':50,
         'FILL_DATA_SMALL_REGION_THRESHOLD':50,
 
+        'ALIASED_INFLATE_SMALL_REGION': 50,
         'ALIASED_ITERATIONS':1,
-        'ALIASED_ITERATIONS_MAX':10,
+        'ALIASED_INFLATE_ITERATIONS_MAX':10,
         'PAD_REG_INDEX':1,
 
         'ALIASED_SQUEEZE_THIN_REGION':False,
@@ -419,14 +420,14 @@ if __name__ == "__main__":
         'ALIASED_SQUEEZE_COLOR_DIFF_THRESHOLD': 0.4,
 
         'DE_ANTI_ALIAS':True,
-        'DE_ANTI_ALIAS_SMALL_REGION':50,
+        'DE_ANTI_ALIAS_SMALL_REGION':150,
         'DE_ANTI_ALIAS_ITERATIONS':10,
     }
     indir = os.path.join('..', 'vec_assets', 'structured', 'advanced')
-    name = 'blur_shapes.png'
+    name = '5.png'
     file = os.path.join(indir, '{}'.format(name))
     print(f'File: {file}')
     image=np.array(Image.open(file))
-    # image = image[95:135, 125:165, :3]
+    image = image[350:930, 1245:1900, :3]
     print(f'Image : {image.shape}')
-    main(npImg = image, app_config=app_config, debug=True)
+    main(npImg = image, app_config=app_config, debug=False)
